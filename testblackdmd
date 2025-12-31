@@ -1,0 +1,505 @@
+-- SERVICES
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+
+-- =====================
+-- STATE VARIABLES
+-- =====================
+local menuColor = Color3.fromRGB(120,60,200)
+local rainbowMenu = false
+local rainbowMenuConn
+
+local highlightEnabled = false
+local highlightRainbow = false
+local highlightColor = Color3.fromRGB(255,0,0)
+
+local boxEnabled = false
+local boxRainbow = false
+local boxColor = Color3.fromRGB(0,255,0)
+
+local namesEnabled = false
+
+local speedMultiplier = 1
+local runningConnections = {}
+local activeESP = {} -- tracks highlight/box/name objects per player
+
+-- =====================
+-- GUI UTILITY
+-- =====================
+local function makeDraggable(frame, handle)
+	local dragging, startPos, startInput
+	handle.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			startInput = i.Position
+			startPos = frame.Position
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = i.Position - startInput
+			frame.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+	UIS.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+end
+
+-- =====================
+-- GUI ROOT
+-- =====================
+local gui = Instance.new("ScreenGui")
+gui.Name = "BlackDmDScripts"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- =====================
+-- MAIN MENU
+-- =====================
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(460, 450)
+main.Position = UDim2.fromScale(0.3,0.2)
+main.BackgroundColor3 = menuColor
+main.BorderSizePixel = 0
+main.Parent = gui
+Instance.new("UICorner", main).CornerRadius = UDim.new(0,14)
+
+-- TITLE BAR
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1,0,0,40)
+titleBar.BackgroundColor3 = menuColor:Lerp(Color3.new(0,0,0),0.15)
+titleBar.Parent = main
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,-100,1,0)
+title.Position = UDim2.fromOffset(10,0)
+title.Text = "Black DmD Scripts"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundTransparency = 1
+title.Parent = titleBar
+
+-- EXIT BUTTON
+local exitBtn = Instance.new("TextButton")
+exitBtn.Size = UDim2.fromOffset(30,30)
+exitBtn.Position = UDim2.new(1,-35,0,5)
+exitBtn.Text = "X"
+exitBtn.Font = Enum.Font.GothamBold
+exitBtn.TextColor3 = Color3.new(1,1,1)
+exitBtn.Parent = titleBar
+Instance.new("UICorner", exitBtn).CornerRadius = UDim.new(0,8)
+
+-- MINIMIZE BUTTON
+local minimize = Instance.new("TextButton")
+minimize.Size = UDim2.fromOffset(30,30)
+minimize.Position = UDim2.new(1,-70,0,5)
+minimize.Text = "-"
+minimize.Font = Enum.Font.GothamBold
+minimize.TextColor3 = Color3.new(1,1,1)
+minimize.Parent = titleBar
+Instance.new("UICorner", minimize).CornerRadius = UDim.new(0,8)
+
+makeDraggable(main, titleBar)
+
+-- DROPDOWN MENU
+local dropdown = Instance.new("Frame")
+dropdown.Size = UDim2.fromOffset(120,45)
+dropdown.Position = UDim2.fromOffset(20,200)
+dropdown.BackgroundColor3 = menuColor
+dropdown.Visible = false
+dropdown.Parent = gui
+Instance.new("UICorner", dropdown).CornerRadius = UDim.new(0,10)
+
+local dmdBtn = Instance.new("TextButton")
+dmdBtn.Size = UDim2.new(1,-40,1,0)
+dmdBtn.Text = "DMD"
+dmdBtn.Font = Enum.Font.GothamBold
+dmdBtn.TextColor3 = Color3.new(1,1,1)
+dmdBtn.Parent = dropdown
+
+local dropExit = Instance.new("TextButton")
+dropExit.Size = UDim2.fromOffset(40,45)
+dropExit.Position = UDim2.new(1,-40,0,0)
+dropExit.Text = "X"
+dropExit.Font = Enum.Font.GothamBold
+dropExit.TextColor3 = Color3.new(1,1,1)
+dropExit.Parent = dropdown
+
+makeDraggable(dropdown, dropdown)
+minimize.MouseButton1Click:Connect(function()
+	main.Visible = false
+	dropdown.Visible = true
+end)
+dmdBtn.MouseButton1Click:Connect(function()
+	main.Visible = true
+	dropdown.Visible = false
+end)
+
+-- =====================
+-- CLEANUP FUNCTION
+-- =====================
+local function cleanup()
+	for _,conn in pairs(runningConnections) do
+		if conn then conn:Disconnect() end
+	end
+	if rainbowMenuConn then rainbowMenuConn:Disconnect() end
+	for p,obj in pairs(activeESP) do
+		for _,v in pairs(obj) do
+			if v and v.Parent then v:Destroy() end
+		end
+	end
+	activeESP = {}
+	player.Character.Humanoid.WalkSpeed = 16
+end
+
+exitBtn.MouseButton1Click:Connect(function()
+	cleanup()
+	gui:Destroy()
+end)
+dropExit.MouseButton1Click:Connect(function()
+	cleanup()
+	gui:Destroy()
+end)
+
+-- =====================
+-- TABS
+-- =====================
+local tabs = Instance.new("Frame")
+tabs.Size = UDim2.new(1,0,0,40)
+tabs.Position = UDim2.fromOffset(0,40)
+tabs.BackgroundTransparency = 1
+tabs.Parent = main
+
+local function tab(text,x)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.fromOffset(130,30)
+	b.Position = UDim2.fromOffset(x,5)
+	b.Text = text
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 14
+	b.TextColor3 = Color3.new(1,1,1)
+	b.Parent = tabs
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0,8)
+	return b
+end
+
+local customizeBtn = tab("Customize",10)
+local generalBtn = tab("General",160)
+local sabBtn = tab("SAB",310)
+
+-- =====================
+-- SCROLLABLE CONTENT
+-- =====================
+local content = Instance.new("ScrollingFrame")
+content.Size = UDim2.new(1,-20,1,-100)
+content.Position = UDim2.fromOffset(10,85)
+content.CanvasSize = UDim2.new(0,0,0,900)
+content.ScrollBarImageTransparency = 0.4
+content.BackgroundTransparency = 1
+content.Parent = main
+
+-- =====================
+-- SECTIONS
+-- =====================
+local function newSection()
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(1,0,0,900)
+	f.Visible = false
+	f.BackgroundTransparency = 1
+	f.Parent = content
+	return f
+end
+
+local customize = newSection()
+local general = newSection()
+local sab = newSection()
+customize.Visible = true
+
+local function show(sec)
+	customize.Visible = false
+	general.Visible = false
+	sab.Visible = false
+	sec.Visible = true
+	content.CanvasPosition = Vector2.new(0,0)
+end
+
+customizeBtn.MouseButton1Click:Connect(function() show(customize) end)
+generalBtn.MouseButton1Click:Connect(function() show(general) end)
+sabBtn.MouseButton1Click:Connect(function() show(sab) end)
+
+-- =====================
+-- CUSTOMIZE SECTION
+-- =====================
+local function applyMenuColor(color)
+	menuColor = color
+	main.BackgroundColor3 = color
+	titleBar.BackgroundColor3 = color:Lerp(Color3.new(0,0,0),0.15)
+	dropdown.BackgroundColor3 = color
+	for _,v in ipairs(gui:GetDescendants()) do
+		if v:IsA("TextButton") then
+			v.BackgroundColor3 = color:Lerp(Color3.new(0,0,0),0.05)
+		end
+	end
+end
+
+local colorList = {
+	{"Purple", Color3.fromRGB(120,60,200)},
+	{"Blue", Color3.fromRGB(60,100,200)},
+	{"Red", Color3.fromRGB(180,60,60)},
+	{"Green", Color3.fromRGB(60,180,100)},
+	{"Pink", Color3.fromRGB(200,80,150)},
+	{"Orange", Color3.fromRGB(220,140,60)},
+	{"Yellow", Color3.fromRGB(230,230,60)},
+	{"Cyan", Color3.fromRGB(60,220,220)}
+}
+
+local startX,startY = 10,10
+local colCount = 2
+local padX,padY = 210,35
+for i,c in ipairs(colorList) do
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.fromOffset(200,30)
+	local row = math.floor((i-1)/colCount)
+	local col = (i-1)%colCount
+	btn.Position = UDim2.fromOffset(startX+col*padX, startY+row*padY)
+	btn.Text = c[1]
+	btn.Parent = customize
+	btn.MouseButton1Click:Connect(function()
+		rainbowMenu = false
+		if rainbowMenuConn then rainbowMenuConn:Disconnect() end
+		applyMenuColor(c[2])
+	end)
+end
+
+local rainbowBtn = Instance.new("TextButton")
+rainbowBtn.Size = UDim2.fromOffset(200,30)
+rainbowBtn.Position = UDim2.fromOffset(startX, startY+math.ceil(#colorList/colCount)*padY + 10)
+rainbowBtn.Text = "Toggle Rainbow Menu"
+rainbowBtn.Parent = customize
+rainbowBtn.MouseButton1Click:Connect(function()
+	rainbowMenu = not rainbowMenu
+	if rainbowMenu then
+		local t = 0
+		rainbowMenuConn = RunService.RenderStepped:Connect(function(dt)
+			t += dt
+			applyMenuColor(Color3.fromHSV((t*0.15)%1,1,1))
+		end)
+	else
+		if rainbowMenuConn then rainbowMenuConn:Disconnect() end
+	end
+end)
+
+-- =====================
+-- GENERAL SECTION ESP
+-- =====================
+local function setupESP(p)
+	if p == player then return end
+	local function applyESP(char)
+		if not char then return end
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		local head = char:FindFirstChild("Head")
+		if not activeESP[p] then activeESP[p] = {} end
+
+		-- Highlight
+		if highlightEnabled then
+			local h = char:FindFirstChild("BDMD_Highlight")
+			if not h then
+				h = Instance.new("Highlight")
+				h.Name = "BDMD_Highlight"
+				h.Parent = char
+				activeESP[p]["highlight"] = h
+			end
+			h.Adornee = char
+			h.FillColor = highlightColor
+			h.OutlineColor = highlightColor
+		else
+			local h = char:FindFirstChild("BDMD_Highlight")
+			if h then h:Destroy() end
+			activeESP[p]["highlight"] = nil
+		end
+
+		-- Box
+		if boxEnabled and hrp then
+			local box = char:FindFirstChild("BDMD_Box")
+			if not box then
+				box = Instance.new("BoxHandleAdornment")
+				box.Name = "BDMD_Box"
+				box.Adornee = hrp
+				box.AlwaysOnTop = true
+				box.ZIndex = 10
+				box.Size = Vector3.new(4,6,1)
+				box.Parent = hrp
+				activeESP[p]["box"] = box
+			end
+			box.Color3 = boxColor
+		else
+			local box = char:FindFirstChild("BDMD_Box")
+			if box then box:Destroy() end
+			activeESP[p]["box"] = nil
+		end
+
+		-- Names
+		if namesEnabled and head then
+			local n = char:FindFirstChild("BDMD_Name")
+			if not n then
+				n = Instance.new("BillboardGui")
+				n.Name = "BDMD_Name"
+				n.Size = UDim2.new(0,100,0,50)
+				n.Adornee = head
+				n.AlwaysOnTop = true
+				local label = Instance.new("TextLabel")
+				label.Size = UDim2.new(1,0,1,0)
+				label.BackgroundTransparency = 1
+				label.Text = p.Name
+				label.TextColor3 = Color3.new(1,1,1)
+				label.TextScaled = true
+				label.Font = Enum.Font.GothamBold
+				label.Parent = n
+				n.Parent = head
+				activeESP[p]["name"] = n
+			end
+		else
+			local n = char:FindFirstChild("BDMD_Name")
+			if n then n:Destroy() end
+			if activeESP[p] then activeESP[p]["name"] = nil end
+		end
+	end
+	if p.Character then applyESP(p.Character) end
+	local conn = p.CharacterAdded:Connect(function(char) applyESP(char) end)
+	table.insert(runningConnections, conn)
+end
+
+for _,plr in pairs(Players:GetPlayers()) do setupESP(plr) end
+table.insert(runningConnections, Players.PlayerAdded:Connect(function(plr) setupESP(plr) end))
+
+-- Rainbow Updates
+local rainbowConn = RunService.RenderStepped:Connect(function()
+	if highlightRainbow then highlightColor = Color3.fromHSV(tick()%1,1,1) end
+	if boxRainbow then boxColor = Color3.fromHSV(tick()%1,1,1) end
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character then
+			if activeESP[p] then
+				if activeESP[p]["highlight"] and highlightEnabled then
+					activeESP[p]["highlight"].FillColor = highlightColor
+					activeESP[p]["highlight"].OutlineColor = highlightColor
+				end
+				if activeESP[p]["box"] and boxEnabled then
+					activeESP[p]["box"].Color3 = boxColor
+				end
+			end
+		end
+	end
+end)
+table.insert(runningConnections,rainbowConn)
+
+-- =====================
+-- GENERAL BUTTONS
+-- =====================
+local startXG,startYG = 10,10
+local padYG = 40
+
+-- Highlight Toggle
+local hlBtn = Instance.new("TextButton")
+hlBtn.Size = UDim2.fromOffset(200,30)
+hlBtn.Position = UDim2.fromOffset(startXG,startYG)
+hlBtn.Text = "Toggle Player Highlights"
+hlBtn.Parent = general
+hlBtn.MouseButton1Click:Connect(function()
+	highlightEnabled = not highlightEnabled
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character then setupESP(p) end
+	end
+end)
+
+-- Highlight Rainbow Toggle
+local hlRainbowBtn = Instance.new("TextButton")
+hlRainbowBtn.Size = UDim2.fromOffset(200,30)
+hlRainbowBtn.Position = UDim2.fromOffset(startXG,startYG+padYG)
+hlRainbowBtn.Text = "Toggle Highlight Rainbow"
+hlRainbowBtn.Parent = general
+hlRainbowBtn.MouseButton1Click:Connect(function()
+	highlightRainbow = not highlightRainbow
+end)
+
+-- Highlight Color Pickers
+local colorsESP = {
+	{"Red", Color3.fromRGB(255,0,0)},
+	{"Green", Color3.fromRGB(0,255,0)},
+	{"Blue", Color3.fromRGB(0,0,255)},
+	{"Yellow", Color3.fromRGB(255,255,0)},
+	{"Cyan", Color3.fromRGB(0,255,255)},
+	{"Magenta", Color3.fromRGB(255,0,255)}
+}
+
+for i,c in ipairs(colorsESP) do
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.fromOffset(90,30)
+	btn.Position = UDim2.fromOffset(startXG + ((i-1)%2)*100,startYG+padYG*2+math.floor((i-1)/2)*35)
+	btn.Text = c[1]
+	btn.Parent = general
+	btn.MouseButton1Click:Connect(function()
+		highlightColor = c[2]
+		highlightRainbow = false
+	end)
+end
+
+-- Box Toggle
+local boxBtn = Instance.new("TextButton")
+boxBtn.Size = UDim2.fromOffset(200,30)
+boxBtn.Position = UDim2.fromOffset(startXG,startYG+padYG*5)
+boxBtn.Text = "Toggle Box ESP"
+boxBtn.Parent = general
+boxBtn.MouseButton1Click:Connect(function()
+	boxEnabled = not boxEnabled
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character then setupESP(p) end
+	end
+end)
+
+-- Box Rainbow
+local boxRainbowBtn = Instance.new("TextButton")
+boxRainbowBtn.Size = UDim2.fromOffset(200,30)
+boxRainbowBtn.Position = UDim2.fromOffset(startXG,startYG+padYG*6)
+boxRainbowBtn.Text = "Toggle Box Rainbow"
+boxRainbowBtn.Parent = general
+boxRainbowBtn.MouseButton1Click:Connect(function()
+	boxRainbow = not boxRainbow
+end)
+
+-- Box Color Pickers
+for i,c in ipairs(colorsESP) do
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.fromOffset(90,30)
+	btn.Position = UDim2.fromOffset(startXG + ((i-1)%2)*100,startYG+padYG*7+math.floor((i-1)/2)*35)
+	btn.Text = c[1]
+	btn.Parent = general
+	btn.MouseButton1Click:Connect(function()
+		boxColor = c[2]
+		boxRainbow = false
+	end)
+end
+
+-- Names Toggle
+local nameBtn = Instance.new("TextButton")
+nameBtn.Size = UDim2.fromOffset(200,30)
+nameBtn.Position = UDim2.fromOffset(startXG,startYG+padYG*10)
+nameBtn.Text = "Toggle Player Names"
+nameBtn.Parent = general
+nameBtn.MouseButton1Click:Connect(function()
+	namesEnabled = not namesEnabled
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character then setupESP(p) end
+	end
+end)
+
+-- Player
