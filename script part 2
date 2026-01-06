@@ -503,13 +503,17 @@ nameBtn.MouseButton1Click:Connect(function()
 end)
 
 -- Player
+-- Player
+
 -- =====================
--- SAB COMMAND EXECUTOR (EMBEDDED)
+-- SAB SECTION (ADDED SCRIPT - UNCHANGED)
 -- =====================
 
-local TextChatService = game:GetService("TextChatService")
+local Players_SAB = game:GetService("Players")
+local TextChatService_SAB = game:GetService("TextChatService")
+local localPlayer_SAB = Players_SAB.LocalPlayer
 
-local sabSelectedPlayer = nil
+local selectedPlayer_SAB = nil
 
 local sabCommands = {
 	";rocket",
@@ -523,76 +527,81 @@ local sabCommands = {
 	";morph"
 }
 
--- SAB TITLE
-local sabTitle = Instance.new("TextLabel")
-sabTitle.Size = UDim2.fromOffset(400, 30)
-sabTitle.Position = UDim2.fromOffset(10, 10)
-sabTitle.Text = "SAB – Execute All Commands"
-sabTitle.Font = Enum.Font.GothamBold
-sabTitle.TextSize = 18
-sabTitle.TextColor3 = Color3.new(1,1,1)
-sabTitle.BackgroundTransparency = 1
-sabTitle.Parent = sab
+-- SAB GUI
+local sabGui = Instance.new("ScreenGui")
+sabGui.Name = "SAB_CommandGui"
+sabGui.ResetOnSpawn = false
+sabGui.Parent = localPlayer_SAB:WaitForChild("PlayerGui")
 
--- PLAYER LIST FRAME
+local sabMain = Instance.new("Frame")
+sabMain.Size = UDim2.new(0, 450, 0, 350)
+sabMain.Position = UDim2.new(0.55, -225, 0.5, -175)
+sabMain.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+sabMain.BorderSizePixel = 0
+sabMain.Parent = sabGui
+
+local sabTitle = Instance.new("TextLabel")
+sabTitle.Size = UDim2.new(1, 0, 0, 35)
+sabTitle.BackgroundTransparency = 1
+sabTitle.Text = "SAB Command Executor"
+sabTitle.TextColor3 = Color3.new(1,1,1)
+sabTitle.TextScaled = true
+sabTitle.Parent = sabMain
+
+-- Player list
 local sabPlayerFrame = Instance.new("Frame")
-sabPlayerFrame.Size = UDim2.fromOffset(400, 220)
-sabPlayerFrame.Position = UDim2.fromOffset(10, 50)
-sabPlayerFrame.BackgroundTransparency = 0.1
-sabPlayerFrame.BackgroundColor3 = Color3.fromRGB(40,40,40)
-sabPlayerFrame.Parent = sab
-Instance.new("UICorner", sabPlayerFrame).CornerRadius = UDim.new(0,10)
+sabPlayerFrame.Position = UDim2.new(0, 10, 0, 45)
+sabPlayerFrame.Size = UDim2.new(1, -20, 1, -100)
+sabPlayerFrame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+sabPlayerFrame.Parent = sabMain
 
 local sabScroll = Instance.new("ScrollingFrame")
-sabScroll.Size = UDim2.new(1,-10,1,-10)
-sabScroll.Position = UDim2.fromOffset(5,5)
+sabScroll.Size = UDim2.new(1, -6, 1, -6)
+sabScroll.Position = UDim2.new(0, 3, 0, 3)
 sabScroll.CanvasSize = UDim2.new(0,0,0,0)
-sabScroll.ScrollBarImageTransparency = 0.4
+sabScroll.ScrollBarImageTransparency = 0.3
 sabScroll.Parent = sabPlayerFrame
 
 local sabLayout = Instance.new("UIListLayout", sabScroll)
-sabLayout.Padding = UDim.new(0,6)
+sabLayout.Padding = UDim.new(0, 6)
 
--- EXECUTE BUTTON
+-- Execute button
 local sabExecute = Instance.new("TextButton")
-sabExecute.Size = UDim2.fromOffset(400, 40)
-sabExecute.Position = UDim2.fromOffset(10, 280)
-sabExecute.Text = "EXECUTE ALL COMMANDS"
-sabExecute.Font = Enum.Font.GothamBold
-sabExecute.TextSize = 16
+sabExecute.Size = UDim2.new(1, -20, 0, 40)
+sabExecute.Position = UDim2.new(0, 10, 1, -45)
+sabExecute.Text = "EXECUTE ALL SAB COMMANDS"
+sabExecute.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
 sabExecute.TextColor3 = Color3.new(1,1,1)
-sabExecute.BackgroundColor3 = Color3.fromRGB(180,60,60)
-sabExecute.Parent = sab
-Instance.new("UICorner", sabExecute).CornerRadius = UDim.new(0,10)
+sabExecute.TextScaled = true
+sabExecute.Parent = sabMain
 
--- CHAT SEND FUNCTION
+-- Chat sender
 local function sabSendChat(msg)
-	if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-		TextChatService.TextChannels.RBXGeneral:SendAsync(msg)
+	if TextChatService_SAB.ChatVersion == Enum.ChatVersion.TextChatService then
+		TextChatService_SAB.TextChannels.RBXGeneral:SendAsync(msg)
 	else
-		Players:Chat(msg)
+		Players_SAB:Chat(msg)
 	end
 end
 
--- PLAYER BUTTONS
+-- Populate players
 local sabButtons = {}
 
 local function refreshSabPlayers()
 	for _,b in ipairs(sabButtons) do b:Destroy() end
 	sabButtons = {}
 
-	for _,plr in ipairs(Players:GetPlayers()) do
+	for _,plr in ipairs(Players_SAB:GetPlayers()) do
 		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.new(1,-4,0,30)
+		btn.Size = UDim2.new(1, -4, 0, 30)
 		btn.Text = plr.Name
-		btn.Font = Enum.Font.Gotham
-		btn.TextSize = 14
-		btn.TextColor3 = Color3.new(1,1,1)
 		btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+		btn.TextColor3 = Color3.new(1,1,1)
+		btn.TextScaled = true
 		btn.Parent = sabScroll
 
 		btn.MouseButton1Click:Connect(function()
-			sabSelectedPlayer = plr
+			selectedPlayer_SAB = plr
 			for _,o in ipairs(sabButtons) do
 				o.BackgroundColor3 = Color3.fromRGB(60,60,60)
 			end
@@ -606,21 +615,14 @@ local function refreshSabPlayers()
 end
 
 refreshSabPlayers()
-Players.PlayerAdded:Connect(refreshSabPlayers)
-Players.PlayerRemoving:Connect(refreshSabPlayers)
+Players_SAB.PlayerAdded:Connect(refreshSabPlayers)
+Players_SAB.PlayerRemoving:Connect(refreshSabPlayers)
 
--- EXECUTE ALL
+-- Execute all commands
 sabExecute.MouseButton1Click:Connect(function()
-	if not sabSelectedPlayer then return end
-
-	sabExecute.MouseButton1Click:Connect(function()
-	if not sabSelectedPlayer then return end
-
-	for _, cmd in ipairs(sabCommands) do
-		task.spawn(function()
-			sabSendChat(cmd .. " " .. sabSelectedPlayer.Name)
-		end)
+	if not selectedPlayer_SAB then return end
+	for _,cmd in ipairs(sabCommands) do
+		sabSendChat(cmd .. " " .. selectedPlayer_SAB.Name)
+		task.wait(0.25)
 	end
-end)
-
 end)
