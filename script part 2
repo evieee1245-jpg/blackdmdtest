@@ -613,8 +613,14 @@ Players.PlayerRemoving:Connect(refreshSabPlayers)
 sabExecute.MouseButton1Click:Connect(function()
 	if not sabSelectedPlayer then return end
 
-	for _,cmd in ipairs(sabCommands) do
-		sabSendChat(cmd .. " " .. sabSelectedPlayer.Name)
-		task.wait(0.25)
+	sabExecute.MouseButton1Click:Connect(function()
+	if not sabSelectedPlayer then return end
+
+	for _, cmd in ipairs(sabCommands) do
+		task.spawn(function()
+			sabSendChat(cmd .. " " .. sabSelectedPlayer.Name)
+		end)
 	end
+end)
+
 end)
