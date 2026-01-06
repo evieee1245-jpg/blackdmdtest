@@ -501,8 +501,6 @@ nameBtn.MouseButton1Click:Connect(function()
 		if p.Character then setupESP(p) end
 	end
 end)
-
--- Player
 -- =====================
 -- SAB COMMAND EXECUTOR (EMBEDDED)
 -- =====================
