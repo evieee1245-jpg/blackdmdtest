@@ -461,7 +461,7 @@ end
 -- Names Toggle
 local nameBtn = Instance.new("TextButton")
 nameBtn.Size = UDim2.fromOffset(200,30)
-nameBtn.Position = UDim2.fromOffset(startXG,startYG+padYG*10)
+nameBtn.Position = UDim2.fromOffset(startXG,startYG+padYG)
 nameBtn.Text = "Player Names"
 nameBtn.Parent = general
 nameBtn.MouseButton1Click:Connect(function()
