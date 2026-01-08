@@ -199,6 +199,12 @@ local function cleanup()
 	end
 end
 
+for _, p in ipairs(Players:GetPlayers()) do
+	if p.Character then
+		local n = p.Character:FindFirstChild("BDMD_Name")
+		if n then n:Destroy() end
+	end
+end
 
 -- =====================
 -- TABS
@@ -414,13 +420,13 @@ table.insert(runningConnections,rainbowConn)
 -- =====================
 -- GENERAL BUTTONS
 -- =====================
-local startXG,startYG = 10,10
-local padYG = 40
+local startXG, startYG = 10, 10
+local padYG = 38
 
 -- Highlight Toggle
 local hlBtn = Instance.new("TextButton")
 hlBtn.Size = UDim2.fromOffset(200,30)
-hlBtn.Position = UDim2.fromOffset(startXG,startYG)
+hlBtn.Position = UDim2.fromOffset(startXG, startYG)
 hlBtn.Text = "Toggle Esp"
 hlBtn.Parent = general
 hlBtn.MouseButton1Click:Connect(function()
@@ -433,7 +439,7 @@ end)
 -- Highlight Rainbow Toggle
 local hlRainbowBtn = Instance.new("TextButton")
 hlRainbowBtn.Size = UDim2.fromOffset(200,30)
-hlRainbowBtn.Position = UDim2.fromOffset(startXG,startYG+padYG)
+hlRainbowBtn.Position = UDim2.fromOffset(startXG, startYG + padYG)
 hlRainbowBtn.Text = "Rainbow ESP"
 hlRainbowBtn.Parent = general
 hlRainbowBtn.MouseButton1Click:Connect(function()
@@ -471,16 +477,18 @@ nameBtn.Parent = general
 nameBtn.MouseButton1Click:Connect(function()
 	namesEnabled = not namesEnabled
 
-	for _,p in pairs(Players:GetPlayers()) do
-		if p.Character then
+	nameBtn.MouseButton1Click:Connect(function()
+	namesEnabled = not namesEnabled
+
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player and p.Character then
 			if namesEnabled then
 				setupESP(p)
 			else
-				local char = p.Character
-				local n = char and char:FindFirstChild("BDMD_Name")
+				local n = p.Character:FindFirstChild("BDMD_Name")
 				if n then n:Destroy() end
 				if activeESP[p] then
-					activeESP[p]["name"] = nil
+					activeESP[p].name = nil
 				end
 			end
 		end
