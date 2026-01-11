@@ -113,37 +113,84 @@ makeDraggable(main, titleBar)
 
 -- DROPDOWN MENU
 local dropdown = Instance.new("Frame")
-dropdown.Size = UDim2.fromOffset(120,45)
-dropdown.Position = UDim2.fromOffset(20,200)
-dropdown.BackgroundColor3 = menuColor
+dropdown.Size = UDim2.fromOffset(150, 80)
+dropdown.Position = UDim2.fromOffset(20, 200)
+dropdown.BackgroundColor3 = Color3.fromRGB(0,0,0) -- black inside
+dropdown.BorderSizePixel = 0
 dropdown.Visible = false
 dropdown.Parent = gui
-Instance.new("UICorner", dropdown).CornerRadius = UDim.new(0,10)
 
+-- Rounded corners
+local outline = Instance.new("UICorner")
+outline.CornerRadius = UDim.new(0,12)
+outline.Parent = dropdown
+
+-- Purple outline
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 3
+stroke.Color = Color3.fromRGB(120,60,200) -- purple
+stroke.Parent = dropdown
+
+-- =====================
+-- DRAG BAR (no text)
+-- =====================
+local dragBar = Instance.new("Frame")
+dragBar.Size = UDim2.new(1,0,0,20)
+dragBar.Position = UDim2.new(0,0,0,0)
+dragBar.BackgroundColor3 = Color3.fromRGB(0,0,0) -- black
+dragBar.Parent = dropdown
+
+local dragCorner = Instance.new("UICorner")
+dragCorner.CornerRadius = UDim.new(0,12)
+dragCorner.Parent = dragBar
+
+-- Make dropdown draggable via dragBar
+makeDraggable(dropdown, dragBar)
+
+-- =====================
+-- DROPDOWN BUTTONS (fully static)
+-- =====================
 local dmdBtn = Instance.new("TextButton")
-dmdBtn.Size = UDim2.new(1,-40,1,0)
+dmdBtn.Size = UDim2.new(1,-40,0,50)
+dmdBtn.Position = UDim2.fromOffset(0,20) -- below drag bar
 dmdBtn.Text = "DMD"
 dmdBtn.Font = Enum.Font.GothamBold
 dmdBtn.TextColor3 = Color3.new(1,1,1)
+dmdBtn.BackgroundColor3 = Color3.fromRGB(0,0,0) -- black
+dmdBtn.BorderSizePixel = 0
 dmdBtn.Parent = dropdown
 
 local dropExit = Instance.new("TextButton")
-dropExit.Size = UDim2.fromOffset(40,45)
-dropExit.Position = UDim2.new(1,-40,0,0)
+dropExit.Size = UDim2.fromOffset(40,50)
+dropExit.Position = UDim2.new(1,-40,0,20) -- next to DMD button
 dropExit.Text = "X"
 dropExit.Font = Enum.Font.GothamBold
 dropExit.TextColor3 = Color3.new(1,1,1)
+dropExit.BackgroundColor3 = Color3.fromRGB(0,0,0) -- black
+dropExit.BorderSizePixel = 0
 dropExit.Parent = dropdown
 
-makeDraggable(dropdown, dropdown)
-minimize.MouseButton1Click:Connect(function()
-	main.Visible = false
-	dropdown.Visible = true
-end)
+-- Show main menu when clicking the dropdown button
 dmdBtn.MouseButton1Click:Connect(function()
 	main.Visible = true
 	dropdown.Visible = false
 end)
+
+-- Close dropdown completely
+dropExit.MouseButton1Click:Connect(function()
+	cleanup()
+	gui:Destroy()
+end)
+
+-- =====================
+-- MINIMIZE MAIN MENU TO SHOW DROPDOWN
+-- =====================
+minimize.MouseButton1Click:Connect(function()
+	main.Visible = false
+	dropdown.Visible = true
+	dropdown.Position = UDim2.fromOffset(20,200)
+end)
+
 
 -- =====================
 -- CLEANUP FUNCTION
