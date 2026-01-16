@@ -1,0 +1,999 @@
+-- SERVICES
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+
+-- =====================
+-- STATE VARIABLES
+-- =====================
+local menuColor = Color3.fromRGB(120,60,200)
+local rainbowMenu = false
+local rainbowMenuConn
+
+local highlightEnabled = false
+local highlightRainbow = false
+local highlightColor = Color3.fromRGB(255,0,0)
+
+local boxEnabled = false
+local boxRainbow = false
+local boxColor = Color3.fromRGB(0,255,0)
+
+local namesEnabled = false
+
+local speedMultiplier = 1
+local runningConnections = {}
+local activeESP = {} -- tracks highlight/box/name objects per player
+
+-- =====================
+-- GUI UTILITY
+-- =====================
+local function makeDraggable(frame, handle)
+	local dragging, startPos, startInput
+	handle.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			startInput = i.Position
+			startPos = frame.Position
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = i.Position - startInput
+			frame.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+	UIS.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+end
+
+-- =====================
+-- GUI ROOT
+-- =====================
+local gui = Instance.new("ScreenGui")
+gui.Name = "BlackDmDScripts"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- =====================
+-- MAIN MENU
+-- =====================
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(460, 450)
+main.Position = UDim2.fromScale(0.3,0.2)
+main.BackgroundColor3 = menuColor
+main.BorderSizePixel = 0
+main.Parent = gui
+Instance.new("UICorner", main).CornerRadius = UDim.new(0,14)
+
+-- TITLE BAR
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1,0,0,40)
+titleBar.BackgroundColor3 = menuColor:Lerp(Color3.new(0,0,0),0.15)
+titleBar.Parent = main
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,-100,1,0)
+title.Position = UDim2.fromOffset(10,0)
+title.Text = "Black Diamond"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundTransparency = 1
+title.Parent = titleBar
+
+-- EXIT BUTTON
+local exitBtn = Instance.new("TextButton")
+exitBtn.Size = UDim2.fromOffset(30,30)
+exitBtn.Position = UDim2.new(1,-35,0,5)
+exitBtn.Text = "X"
+exitBtn.Font = Enum.Font.GothamBold
+exitBtn.TextColor3 = Color3.new(1,1,1)
+exitBtn.Parent = titleBar
+Instance.new("UICorner", exitBtn).CornerRadius = UDim.new(0,8)
+
+-- MINIMIZE BUTTON
+local minimize = Instance.new("TextButton")
+minimize.Size = UDim2.fromOffset(30,30)
+minimize.Position = UDim2.new(1,-70,0,5)
+minimize.Text = "-"
+minimize.Font = Enum.Font.GothamBold
+minimize.TextColor3 = Color3.new(1,1,1)
+minimize.Parent = titleBar
+Instance.new("UICorner", minimize).CornerRadius = UDim.new(0,8)
+
+makeDraggable(main, titleBar)
+
+-- DROPDOWN MENU
+local dropdown = Instance.new("Frame")
+dropdown.Size = UDim2.fromOffset(150, 80)
+dropdown.Position = UDim2.fromOffset(20, 200)
+dropdown.BackgroundColor3 = Color3.fromRGB(0,0,0) -- black inside
+dropdown.BorderSizePixel = 0
+dropdown.Visible = false
+dropdown.Parent = gui
+
+-- Rounded corners
+local outline = Instance.new("UICorner")
+outline.CornerRadius = UDim.new(0,12)
+outline.Parent = dropdown
+
+-- Purple outline
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 3
+stroke.Color = Color3.fromRGB(120,60,200) -- purple
+stroke.Parent = dropdown
+
+-- =====================
+-- DRAG BAR (no text)
+-- =====================
+local dragBar = Instance.new("Frame")
+dragBar.Size = UDim2.new(1,0,0,20)
+dragBar.Position = UDim2.new(0,0,0,0)
+dragBar.BackgroundColor3 = Color3.fromRGB(0,0,0) -- black
+dragBar.Parent = dropdown
+
+local dragCorner = Instance.new("UICorner")
+dragCorner.CornerRadius = UDim.new(0,12)
+dragCorner.Parent = dragBar
+
+-- Make dropdown draggable via dragBar
+makeDraggable(dropdown, dragBar)
+
+-- =====================
+-- DROPDOWN BUTTONS (fully static)
+-- =====================
+local dmdBtn = Instance.new("TextButton")
+dmdBtn.Size = UDim2.new(1,-40,0,50)
+dmdBtn.Position = UDim2.fromOffset(0,20) -- below drag bar
+dmdBtn.Text = "DMD"
+dmdBtn.Font = Enum.Font.GothamBold
+dmdBtn.TextColor3 = Color3.new(1,1,1)
+dmdBtn.BackgroundColor3 = Color3.fromRGB(0,0,0) -- black
+dmdBtn.BorderSizePixel = 0
+dmdBtn.Parent = dropdown
+
+local dropExit = Instance.new("TextButton")
+dropExit.Size = UDim2.fromOffset(40,50)
+dropExit.Position = UDim2.new(1,-40,0,20) -- next to DMD button
+dropExit.Text = "X"
+dropExit.Font = Enum.Font.GothamBold
+dropExit.TextColor3 = Color3.new(1,1,1)
+dropExit.BackgroundColor3 = Color3.fromRGB(0,0,0) -- black
+dropExit.BorderSizePixel = 0
+dropExit.Parent = dropdown
+
+-- Show main menu when clicking the dropdown button
+dmdBtn.MouseButton1Click:Connect(function()
+	main.Visible = true
+	dropdown.Visible = false
+end)
+
+-- Close dropdown completely
+dropExit.MouseButton1Click:Connect(function()
+	cleanup()
+	gui:Destroy()
+end)
+
+-- =====================
+-- MINIMIZE MAIN MENU TO SHOW DROPDOWN
+-- =====================
+minimize.MouseButton1Click:Connect(function()
+	main.Visible = false
+	dropdown.Visible = true
+	dropdown.Position = UDim2.fromOffset(20,200)
+end)
+
+
+-- =====================
+-- CLEANUP FUNCTION
+-- =====================
+local function cleanup()
+	for _,conn in pairs(runningConnections) do
+		if conn then conn:Disconnect() end
+	end
+	if rainbowMenuConn then rainbowMenuConn:Disconnect() end
+	for p,obj in pairs(activeESP) do
+		for _,v in pairs(obj) do
+			if v and v.Parent then v:Destroy() end
+		end
+	end
+	activeESP = {}
+	player.Character.Humanoid.WalkSpeed = 16
+end
+
+exitBtn.MouseButton1Click:Connect(function()
+	cleanup()
+	gui:Destroy()
+end)
+dropExit.MouseButton1Click:Connect(function()
+	cleanup()
+	gui:Destroy()
+end)
+
+-- =====================
+-- TABS
+-- =====================
+local tabs = Instance.new("Frame")
+tabs.Size = UDim2.new(1,0,0,40)
+tabs.Position = UDim2.fromOffset(0,40)
+tabs.BackgroundTransparency = 1
+tabs.Parent = main
+
+local function tab(text,x)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.fromOffset(130,30)
+	b.Position = UDim2.fromOffset(x,5)
+	b.Text = text
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 14
+	b.TextColor3 = Color3.new(1,1,1)
+	b.Parent = tabs
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0,8)
+	return b
+end
+
+local customizeBtn = tab("Customize",10)
+local generalBtn = tab("General",160)
+local sabBtn = tab("Steal A Brainrot",310)
+
+-- =====================
+-- SCROLLABLE CONTENT
+-- =====================
+local content = Instance.new("ScrollingFrame")
+content.Size = UDim2.new(1,-20,1,-100)
+content.Position = UDim2.fromOffset(10,85)
+content.CanvasSize = UDim2.new(0,0,0,3000)
+content.ScrollBarImageTransparency = 0.4
+content.BackgroundTransparency = 1
+content.Parent = main
+
+-- =====================
+-- SECTIONS
+-- =====================
+local function newSection()
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(1,0,0,900)
+	f.Visible = false
+	f.BackgroundTransparency = 1
+	f.Parent = content
+	return f
+end
+
+local customize = newSection()
+local general = newSection()
+local sab = newSection()
+customize.Visible = true
+
+local function show(sec)
+	customize.Visible = false
+	general.Visible = false
+	sab.Visible = false
+	sec.Visible = true
+	content.CanvasPosition = Vector2.new(0,0)
+end
+
+customizeBtn.MouseButton1Click:Connect(function() show(customize) end)
+generalBtn.MouseButton1Click:Connect(function() show(general) end)
+sabBtn.MouseButton1Click:Connect(function() show(sab) end)
+
+-- =====================
+-- CUSTOMIZE SECTION
+-- =====================
+local function applyMenuColor(color)
+	menuColor = color
+	main.BackgroundColor3 = color
+	titleBar.BackgroundColor3 = color:Lerp(Color3.new(0,0,0),0.15)
+	dropdown.BackgroundColor3 = color
+	for _,v in ipairs(gui:GetDescendants()) do
+		if v:IsA("TextButton") then
+			v.BackgroundColor3 = color:Lerp(Color3.new(0,0,0),0.05)
+		end
+	end
+end
+
+local colorList = {
+	{"Purple", Color3.fromRGB(120,60,200)},
+	{"Blue", Color3.fromRGB(60,100,200)},
+	{"Red", Color3.fromRGB(180,60,60)},
+	{"Green", Color3.fromRGB(60,180,100)},
+	{"Pink", Color3.fromRGB(200,80,150)},
+	{"Orange", Color3.fromRGB(220,140,60)},
+	{"Yellow", Color3.fromRGB(230,230,60)},
+	{"Cyan", Color3.fromRGB(60,220,220)}
+}
+
+local startX,startY = 10,10
+local colCount = 2
+local padX,padY = 210,35
+for i,c in ipairs(colorList) do
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.fromOffset(200,30)
+	local row = math.floor((i-1)/colCount)
+	local col = (i-1)%colCount
+	btn.Position = UDim2.fromOffset(startX+col*padX, startY+row*padY)
+	btn.Text = c[1]
+	btn.Parent = customize
+	btn.MouseButton1Click:Connect(function()
+		rainbowMenu = false
+		if rainbowMenuConn then rainbowMenuConn:Disconnect() end
+		applyMenuColor(c[2])
+	end)
+end
+
+local rainbowBtn = Instance.new("TextButton")
+rainbowBtn.Size = UDim2.fromOffset(200,30)
+rainbowBtn.Position = UDim2.fromOffset(startX, startY+math.ceil(#colorList/colCount)*padY + 10)
+rainbowBtn.Text = "Rainbow Menu"
+rainbowBtn.Parent = customize
+rainbowBtn.MouseButton1Click:Connect(function()
+	rainbowMenu = not rainbowMenu
+	if rainbowMenu then
+		local t = 0
+		rainbowMenuConn = RunService.RenderStepped:Connect(function(dt)
+			t += dt
+			applyMenuColor(Color3.fromHSV((t*0.15)%1,1,1))
+		end)
+	else
+		if rainbowMenuConn then rainbowMenuConn:Disconnect() end
+	end
+end)
+
+-- =====================
+-- GENERAL SECTION ESP
+-- =====================
+local function setupESP(p)
+	if p == player then return end
+	local function applyESP(char)
+		if not char then return end
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		local head = char:FindFirstChild("Head")
+		if not activeESP[p] then activeESP[p] = {} end
+
+		-- Highlight
+		if highlightEnabled then
+			local h = char:FindFirstChild("BDMD_Highlight")
+			if not h then
+				h = Instance.new("Highlight")
+				h.Name = "BDMD_Highlight"
+				h.Parent = char
+				activeESP[p]["highlight"] = h
+			end
+			h.Adornee = char
+			h.FillColor = highlightColor
+			h.OutlineColor = highlightColor
+		else
+			local h = char:FindFirstChild("BDMD_Highlight")
+			if h then h:Destroy() end
+			activeESP[p]["highlight"] = nil
+		end
+
+
+		-- Names
+		if namesEnabled and head then
+			local n = char:FindFirstChild("BDMD_Name")
+			if not n then
+				n = Instance.new("BillboardGui")
+				n.Name = "BDMD_Name"
+				n.Size = UDim2.new(0,100,0,50)
+				n.Adornee = head
+				n.AlwaysOnTop = true
+				local label = Instance.new("TextLabel")
+				label.Size = UDim2.new(1,0,1,0)
+				label.BackgroundTransparency = 1
+				label.Text = p.Name
+				label.TextColor3 = Color3.new(1,1,1)
+				label.TextScaled = true
+				label.Font = Enum.Font.GothamBold
+				label.Parent = n
+				n.Parent = char 
+				activeESP[p]["name"] = n
+			end
+		else
+	local n = char:FindFirstChild("BDMD_Name")
+	if n then n:Destroy() end
+	if activeESP[p] then activeESP[p]["name"] = nil end
+end
+	end
+	if p.Character then applyESP(p.Character) end
+	local conn = p.CharacterAdded:Connect(function(char) applyESP(char) end)
+	table.insert(runningConnections, conn)
+end
+
+for _,plr in pairs(Players:GetPlayers()) do setupESP(plr) end
+table.insert(runningConnections, Players.PlayerAdded:Connect(function(plr) setupESP(plr) end))
+
+-- Rainbow Updates
+local rainbowConn = RunService.RenderStepped:Connect(function()
+	if highlightRainbow then highlightColor = Color3.fromHSV(tick()%1,1,1) end
+	if boxRainbow then boxColor = Color3.fromHSV(tick()%1,1,1) end
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character then
+			if activeESP[p] then
+				if activeESP[p]["highlight"] and highlightEnabled then
+					activeESP[p]["highlight"].FillColor = highlightColor
+					activeESP[p]["highlight"].OutlineColor = highlightColor
+				end
+				if activeESP[p]["box"] and boxEnabled then
+					activeESP[p]["box"].Color3 = boxColor
+				end
+			end
+		end
+	end
+end)
+table.insert(runningConnections,rainbowConn)
+
+-- =====================
+-- GENERAL BUTTONS
+-- =====================
+local startXG,startYG = 10,10
+local padYG = 40
+
+-- Highlight Toggle
+local hlBtn = Instance.new("TextButton")
+hlBtn.Size = UDim2.fromOffset(200,30)
+hlBtn.Position = UDim2.fromOffset(startXG,startYG)
+hlBtn.Text = "Toggle ESP"
+hlBtn.Parent = general
+hlBtn.MouseButton1Click:Connect(function()
+	highlightEnabled = not highlightEnabled
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character then setupESP(p) end
+	end
+end)
+
+-- Highlight Rainbow Toggle
+local hlRainbowBtn = Instance.new("TextButton")
+hlRainbowBtn.Size = UDim2.fromOffset(200,30)
+hlRainbowBtn.Position = UDim2.fromOffset(startXG,startYG+padYG)
+hlRainbowBtn.Text = "Toggle Rainbow ESP"
+hlRainbowBtn.Parent = general
+hlRainbowBtn.MouseButton1Click:Connect(function()
+	highlightRainbow = not highlightRainbow
+end)
+
+-- Highlight Color Pickers
+local colorsESP = {
+	{"Red", Color3.fromRGB(255,0,0)},
+	{"Green", Color3.fromRGB(0,255,0)},
+	{"Blue", Color3.fromRGB(0,0,255)},
+	{"Yellow", Color3.fromRGB(255,255,0)},
+	{"Cyan", Color3.fromRGB(0,255,255)},
+	{"Magenta", Color3.fromRGB(255,0,255)}
+}
+
+for i,c in ipairs(colorsESP) do
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.fromOffset(90,30)
+	btn.Position = UDim2.fromOffset(startXG + ((i-1)%2)*100,startYG+padYG*2+math.floor((i-1)/2)*35)
+	btn.Text = c[1]
+	btn.Parent = general
+	btn.MouseButton1Click:Connect(function()
+		highlightColor = c[2]
+		highlightRainbow = false
+	end)
+end
+
+
+-- Names Toggle
+local nameBtn = Instance.new("TextButton")
+nameBtn.Size = UDim2.fromOffset(200,30)
+nameBtn.Position = UDim2.fromOffset(startXG,startYG+padYG*5)
+nameBtn.Text = "Toggle Player Names"
+nameBtn.Parent = general
+nameBtn.MouseButton1Click:Connect(function()
+	namesEnabled = not namesEnabled
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character then setupESP(p) end
+	end
+end)
+-- =====================
+-- SAB COMMAND EXECUTOR (EMBEDDED)
+-- =====================
+
+local TextChatService = game:GetService("TextChatService")
+
+local sabSelectedPlayer = nil
+
+local sabCommands = {
+	";rocket",
+	";ragdoll",
+	";balloon",
+	";inverse",
+	";nightvision",
+	";jail",
+	";tiny",
+	";jumpscare",
+	";morph"
+}
+
+-- SAB TITLE
+local sabTitle = Instance.new("TextLabel")
+sabTitle.Size = UDim2.fromOffset(400, 30)
+sabTitle.Position = UDim2.fromOffset(10, 10)
+sabTitle.Text = "AP Spammer"
+sabTitle.Font = Enum.Font.GothamBold
+sabTitle.TextSize = 18
+sabTitle.TextColor3 = Color3.new(1,1,1)
+sabTitle.BackgroundTransparency = 1
+sabTitle.Parent = sab
+
+-- PLAYER LIST FRAME
+local sabPlayerFrame = Instance.new("Frame")
+sabPlayerFrame.Size = UDim2.fromOffset(400, 220)
+sabPlayerFrame.Position = UDim2.fromOffset(10, 50)
+sabPlayerFrame.BackgroundTransparency = 0.1
+sabPlayerFrame.BackgroundColor3 = Color3.fromRGB(40,40,40)
+sabPlayerFrame.Parent = sab
+Instance.new("UICorner", sabPlayerFrame).CornerRadius = UDim.new(0,10)
+
+local sabScroll = Instance.new("ScrollingFrame")
+sabScroll.Size = UDim2.new(1,-10,1,-10)
+sabScroll.Position = UDim2.fromOffset(5,5)
+sabScroll.CanvasSize = UDim2.new(0,0,0,0)
+sabScroll.ScrollBarImageTransparency = 0.4
+sabScroll.Parent = sabPlayerFrame
+
+local sabLayout = Instance.new("UIListLayout", sabScroll)
+sabLayout.Padding = UDim.new(0,6)
+
+-- EXECUTE BUTTON
+local sabExecute = Instance.new("TextButton")
+sabExecute.Size = UDim2.fromOffset(400, 40)
+sabExecute.Position = UDim2.fromOffset(10, 280)
+sabExecute.Text = "EXECUTE"
+sabExecute.Font = Enum.Font.GothamBold
+sabExecute.TextSize = 16
+sabExecute.TextColor3 = Color3.new(1,1,1)
+sabExecute.BackgroundColor3 = Color3.fromRGB(180,60,60)
+sabExecute.Parent = sab
+Instance.new("UICorner", sabExecute).CornerRadius = UDim.new(0,10)
+
+-- CHAT SEND FUNCTION
+local function sabSendChat(msg)
+	if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+		TextChatService.TextChannels.RBXGeneral:SendAsync(msg)
+	else
+		Players:Chat(msg)
+	end
+end
+
+-- PLAYER BUTTONS
+local sabButtons = {}
+
+local function refreshSabPlayers()
+	for _,b in ipairs(sabButtons) do b:Destroy() end
+	sabButtons = {}
+
+	for _,plr in ipairs(Players:GetPlayers()) do
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1,-4,0,30)
+		btn.Text = plr.Name
+		btn.Font = Enum.Font.Gotham
+		btn.TextSize = 14
+		btn.TextColor3 = Color3.new(1,1,1)
+		btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+		btn.Parent = sabScroll
+
+		btn.MouseButton1Click:Connect(function()
+			sabSelectedPlayer = plr
+			for _,o in ipairs(sabButtons) do
+				o.BackgroundColor3 = Color3.fromRGB(60,60,60)
+			end
+			btn.BackgroundColor3 = Color3.fromRGB(60,170,60)
+		end)
+
+		table.insert(sabButtons, btn)
+	end
+
+	sabScroll.CanvasSize = UDim2.new(0,0,0, sabLayout.AbsoluteContentSize.Y + 10)
+end
+
+refreshSabPlayers()
+Players.PlayerAdded:Connect(refreshSabPlayers)
+Players.PlayerRemoving:Connect(refreshSabPlayers)
+
+-- EXECUTE ALL
+sabExecute.MouseButton1Click:Connect(function()
+	if not sabSelectedPlayer then return end
+
+	for _,cmd in ipairs(sabCommands) do
+		sabSendChat(cmd .. " " .. sabSelectedPlayer.Name)
+		task.wait(0.25)
+	end
+end)
+--=====================
+-- BDMD CROSSHAIR SYSTEM
+--=====================
+local Crosshair = {
+    Enabled = false,
+    Size = 12,
+    Gap = 6,
+    Thickness = 2,
+    Opacity = 1,
+    Dot = true,
+    DotOnly = false,
+    DotSize = 4,
+    Outline = false, -- off by default
+    OutlineThickness = 2, -- only for edges
+    Color = Color3.fromRGB(255,255,255),
+    Rainbow = false,
+    Spin = false,
+    SpinSpeed = 180,
+    Rotation = 0,
+    BaseRotation = 0
+}
+
+-- Crosshair GUI
+local CrosshairGui = Instance.new("ScreenGui")
+CrosshairGui.Name = "BDMD_Crosshair"
+CrosshairGui.IgnoreGuiInset = true
+CrosshairGui.ResetOnSpawn = false
+CrosshairGui.Parent = player.PlayerGui
+
+local function makePart()
+    local f = Instance.new("Frame")
+    f.AnchorPoint = Vector2.new(0.5,0.5)
+    f.BorderSizePixel = 0
+    f.Visible = false
+    f.Parent = CrosshairGui
+    return f
+end
+
+local parts = {
+    up = makePart(),
+    down = makePart(),
+    left = makePart(),
+    right = makePart(),
+    upO = makePart(),
+    downO = makePart(),
+    leftO = makePart(),
+    rightO = makePart(),
+    dot = makePart(),
+    dotO = makePart()
+}
+
+-- Draw helper
+local function draw(obj,pos,size,color)
+    local center = workspace.CurrentCamera.ViewportSize/2
+    obj.Position = UDim2.fromOffset(center.X+pos.X, center.Y+pos.Y)
+    obj.Size = size
+    obj.BackgroundColor3 = color
+    obj.BackgroundTransparency = 1-Crosshair.Opacity
+    obj.Visible = true
+end
+
+-- Rotate vector by radians
+local function rotate(v,r)
+    return Vector2.new(v.X*math.cos(r)-v.Y*math.sin(r), v.X*math.sin(r)+v.Y*math.cos(r))
+end
+
+-- Render crosshair
+RunService.RenderStepped:Connect(function(dt)
+    if not Crosshair.Enabled then
+        CrosshairGui.Enabled = false
+        return
+    end
+    CrosshairGui.Enabled = true
+
+    if Crosshair.Rainbow then
+        Crosshair.Color = Color3.fromHSV(tick()%1,1,1)
+    end
+
+    -- Spin logic (lines rotate around dot but remain vertical)
+    if Crosshair.Spin then
+        Crosshair.Rotation = (Crosshair.Rotation + Crosshair.SpinSpeed*dt)%360
+    else
+        Crosshair.Rotation = Crosshair.BaseRotation
+    end
+
+    for _,v in pairs(parts) do v.Visible = false end
+
+    local len, gap, t, o = Crosshair.Size, Crosshair.Gap, Crosshair.Thickness, Crosshair.OutlineThickness
+
+    if not Crosshair.DotOnly then
+        local arms = {
+            up = Vector2.new(0,-(gap+len/2)),
+            down = Vector2.new(0,(gap+len/2)),
+            left = Vector2.new(-(gap+len/2),0),
+            right = Vector2.new((gap+len/2),0)
+        }
+
+        for name,vec in pairs(arms) do
+            local pos = rotate(vec, math.rad(Crosshair.Rotation))
+            local size = (name=="up" or name=="down") and UDim2.fromOffset(t,len) or UDim2.fromOffset(len,t)
+            draw(parts[name], pos, size, Crosshair.Color)
+            
+            -- Outline only on the ends
+            if Crosshair.Outline then
+                local outlinePos = vec.Unit*(len/2 + gap)
+                local outlineSize = (name=="up" or name=="down") and UDim2.fromOffset(t+o,len/2) or UDim2.fromOffset(len/2,t+o)
+                draw(parts[name.."O"], outlinePos, outlineSize, Color3.fromRGB(0,0,0))
+            end
+        end
+    end
+
+    if Crosshair.Dot then
+        if Crosshair.Outline then
+            draw(parts.dotO, Vector2.zero, UDim2.fromOffset(Crosshair.DotSize+o*2,Crosshair.DotSize+o*2), Color3.fromRGB(0,0,0))
+        end
+        draw(parts.dot, Vector2.zero, UDim2.fromOffset(Crosshair.DotSize,Crosshair.DotSize), Crosshair.Color)
+    end
+end)
+
+--=====================
+-- GENERAL TAB UI
+--=====================
+local baseY = startYG + padYG*6 + 20
+local spacing = 36
+
+local function button(text,y,cb)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.fromOffset(200,30)
+    b.Position = UDim2.fromOffset(startXG,y)
+    b.Text = text
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 14
+    b.TextColor3 = Color3.new(1,1,1)
+    b.BackgroundColor3 = Color3.fromRGB(60,60,60)
+    Instance.new("UICorner",b)
+    b.Parent = general
+    b.MouseButton1Click:Connect(cb)
+end
+
+local function slider(text,y,min,max,init,cb)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.fromOffset(200,20)
+    lbl.Position = UDim2.fromOffset(startXG,y)
+    lbl.Text = text..": "..init
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3 = Color3.new(1,1,1)
+    lbl.Parent = general
+
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.fromOffset(200,8)
+    bar.Position = UDim2.fromOffset(startXG,y+20)
+    bar.BackgroundColor3 = Color3.fromRGB(80,80,80)
+    bar.Parent = general
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.fromScale((init-min)/(max-min),1)
+    fill.BackgroundColor3 = Color3.fromRGB(180,60,60)
+    fill.Parent = bar
+
+    bar.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then
+            local function update(x)
+                local v = math.clamp((x-bar.AbsolutePosition.X)/bar.AbsoluteSize.X,0,1)
+                local val = min + (max-min)*v
+                fill.Size = UDim2.fromScale(v,1)
+                lbl.Text = text..": "..string.format("%.2f",val)
+                cb(val)
+            end
+            update(i.Position.X)
+            local c; c = UIS.InputChanged:Connect(function(m)
+                if m.UserInputType==Enum.UserInputType.MouseMovement then update(m.Position.X) end
+            end)
+            UIS.InputEnded:Once(function() if c then c:Disconnect() end end)
+        end
+    end)
+end
+
+--=====================
+-- BUTTONS & SLIDERS
+--=====================
+button("Toggle Crosshair", baseY, function() Crosshair.Enabled = not Crosshair.Enabled end)
+button("Dot Only", baseY+spacing, function() Crosshair.DotOnly = not Crosshair.DotOnly end)
+button("Toggle Dot", baseY+spacing*2, function() Crosshair.Dot = not Crosshair.Dot end)
+button("Spin Crosshair", baseY+spacing*3, function() Crosshair.Spin = not Crosshair.Spin end)
+button("Rainbow", baseY+spacing*4, function() Crosshair.Rainbow = not Crosshair.Rainbow end)
+
+slider("Size", baseY+spacing*5, 1, 50, Crosshair.Size, function(v) Crosshair.Size=v end)
+slider("Gap", baseY+spacing*6, 0, 50, Crosshair.Gap, function(v) Crosshair.Gap=v end)
+slider("Thickness", baseY+spacing*7, 1, 20, Crosshair.Thickness, function(v) Crosshair.Thickness=v end)
+slider("Dot Size", baseY+spacing*8, 1, 20, Crosshair.DotSize, function(v) Crosshair.DotSize=v end)
+slider("Opacity", baseY+spacing*9, 0, 1, Crosshair.Opacity, function(v) Crosshair.Opacity=v end)
+slider("Spin Speed", baseY+spacing*10, 0, 360, Crosshair.SpinSpeed, function(v) Crosshair.SpinSpeed=v end)
+
+--=====================
+-- 2D HSV COLOR PICKER WITH MARKER
+--=====================
+local pickerSize = 200
+local colorFrame = Instance.new("Frame")
+colorFrame.Size = UDim2.fromOffset(pickerSize,pickerSize)
+colorFrame.Position = UDim2.fromOffset(startXG,baseY+spacing*11)
+colorFrame.BackgroundColor3 = Crosshair.Color
+colorFrame.BorderSizePixel = 0
+colorFrame.Parent = general
+Instance.new("UICorner", colorFrame).CornerRadius = UDim.new(0,8)
+
+-- Marker
+local marker = Instance.new("Frame")
+marker.Size = UDim2.fromOffset(10,10)
+marker.AnchorPoint = Vector2.new(0.5,0.5)
+marker.BackgroundColor3 = Color3.new(0,0,0)
+marker.ZIndex = 2
+marker.Parent = colorFrame
+
+local function updateMarker()
+    local h,s,_ = Color3.toHSV(Crosshair.Color)
+    marker.Position = UDim2.fromScale(h,1-s)
+end
+
+local function hsvPicker(inputPos)
+    local relX = math.clamp(inputPos.X-colorFrame.AbsolutePosition.X,0,colorFrame.AbsoluteSize.X)/colorFrame.AbsoluteSize.X
+    local relY = math.clamp(inputPos.Y-colorFrame.AbsolutePosition.Y,0,colorFrame.AbsoluteSize.Y)/colorFrame.AbsoluteSize.Y
+    Crosshair.Color = Color3.fromHSV(relX,1-relY,1)
+    colorFrame.BackgroundColor3 = Crosshair.Color
+    updateMarker()
+end
+
+colorFrame.InputBegan:Connect(function(input)
+    if input.UserInputType==Enum.UserInputType.MouseButton1 then
+        hsvPicker(input.Position)
+        local moveConn
+        moveConn = UIS.InputChanged:Connect(function(m)
+            if m.UserInputType==Enum.UserInputType.MouseMovement then
+                hsvPicker(m.Position)
+            end
+        end)
+        UIS.InputEnded:Once(function() if moveConn then moveConn:Disconnect() end end)
+    end
+end)
+
+-- Initialize marker
+updateMarker()
+
+--=====================
+-- CLEANUP
+--=====================
+local oldCleanup = cleanup
+cleanup = function()
+    oldCleanup()
+    if CrosshairGui then CrosshairGui:Destroy() end
+end
+
+-- Ensure scrollable canvas sees everything
+content.CanvasSize = UDim2.new(0,0,0,baseY+spacing*11+pickerSize+50)
+--=====================
+-- FULL PERSISTENT PRESET SYSTEM (ROBLOX)
+--=====================
+local HttpService = game:GetService("HttpService")
+local player = game:GetService("Players").LocalPlayer
+local RunService = game:GetService("RunService")
+
+-- Table to store preset in memory
+local fullPreset = {}
+
+-- Function to save preset permanently
+local function savePresetPersistent()
+    local preset = {
+        -- Customize Section
+        MenuColor = {menuColor.R, menuColor.G, menuColor.B},
+        RainbowMenu = rainbowMenu,
+
+        -- General Section
+        HighlightEnabled = highlightEnabled,
+        HighlightRainbow = highlightRainbow,
+        HighlightColor = {highlightColor.R, highlightColor.G, highlightColor.B},
+        NamesEnabled = namesEnabled,
+
+        -- Crosshair Section
+        Crosshair = {
+            Enabled = Crosshair.Enabled,
+            DotOnly = Crosshair.DotOnly,
+            Dot = Crosshair.Dot,
+            Spin = Crosshair.Spin,
+            Rainbow = Crosshair.Rainbow,
+            Size = Crosshair.Size,
+            Gap = Crosshair.Gap,
+            Thickness = Crosshair.Thickness,
+            DotSize = Crosshair.DotSize,
+            Opacity = Crosshair.Opacity,
+            SpinSpeed = Crosshair.SpinSpeed,
+            Color = {Crosshair.Color.R, Crosshair.Color.G, Crosshair.Color.B}
+        }
+    }
+
+    local json = HttpService:JSONEncode(preset)
+    player:SetAttribute("BDMD_Preset", json)
+    print("Preset saved permanently!")
+end
+
+-- Function to load preset permanently
+local function loadPresetPersistent()
+    local json = player:GetAttribute("BDMD_Preset")
+    if not json then
+        print("No preset found!")
+        return
+    end
+
+    local success, preset = pcall(function() return HttpService:JSONDecode(json) end)
+    if not success then
+        warn("Failed to decode preset")
+        return
+    end
+
+    -- Customize Section
+    menuColor = Color3.new(unpack(preset.MenuColor))
+    applyMenuColor(menuColor)
+    rainbowMenu = preset.RainbowMenu
+    if rainbowMenu then
+        local t = 0
+        if rainbowMenuConn then rainbowMenuConn:Disconnect() end
+        rainbowMenuConn = RunService.RenderStepped:Connect(function(dt)
+            t += dt
+            applyMenuColor(Color3.fromHSV((t*0.15)%1,1,1))
+        end)
+    else
+        if rainbowMenuConn then rainbowMenuConn:Disconnect() end
+    end
+
+    -- General Section
+    highlightEnabled = preset.HighlightEnabled
+    highlightRainbow = preset.HighlightRainbow
+    highlightColor = Color3.new(unpack(preset.HighlightColor))
+    namesEnabled = preset.NamesEnabled
+
+    -- Apply ESP for all players
+    for _,p in pairs(game:GetService("Players"):GetPlayers()) do
+        if p.Character then setupESP(p) end
+    end
+
+    -- Crosshair Section
+    for k,v in pairs(preset.Crosshair) do
+        if k == "Color" then
+            Crosshair.Color = Color3.new(unpack(v))
+        else
+            Crosshair[k] = v
+        end
+    end
+
+    -- Update Crosshair GUI
+    if colorFrame then
+        colorFrame.BackgroundColor3 = Crosshair.Color
+        updateMarker()
+    end
+
+    print("Preset loaded permanently!")
+end
+
+--=====================
+-- Buttons in Customize Section
+--=====================
+local presetBaseY = startY + math.ceil(#colorList/colCount)*padY + 50
+
+local function customizeButton(text, y, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.fromOffset(200,30)
+    btn.Position = UDim2.fromOffset(startX, y)
+    btn.Text = text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+    Instance.new("UICorner", btn)
+    btn.Parent = customize
+    btn.MouseButton1Click:Connect(callback)
+end
+
+customizeButton("Save Preset", presetBaseY, savePresetPersistent)
+customizeButton("Load Preset *DOUBLE CLICK*", presetBaseY + 40, loadPresetPersistent)
+
+--=====================
+-- Automatically load preset when menu is opened
+--=====================
+main:GetPropertyChangedSignal("Visible"):Connect(function()
+    if main.Visible then
+        -- Wait until the GUI is fully ready
+        task.defer(function()
+            loadPresetPersistent()
+        end)
+    end
+end)
